@@ -2,6 +2,10 @@ pretrained/**
 !pretrained/PUT_MODEL_HERE
 character
 src
+!tha4/src
+tha4/distiller-ui-doc
+tha4/docs
+tha4/poetry
 dst
 .idea
 bin
@@ -147,4 +151,4 @@ data/
 .serena
 onnx_model_tha4/fp16
 onnx_model_tha4/fp32
-onnx_model_tha4/tmp
+onnx_model_tha4/
