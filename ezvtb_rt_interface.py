@@ -44,7 +44,9 @@ def get_core(
         sr_half:bool = True,
         sr_noise:int = 1,
         #THA4 model setting (NEW)
-        use_tha4:bool = False  # Use THA4 instead of THA3
+        use_tha4: bool = False,  # Use THA4 instead of THA3
+        use_tha4_student: bool = False,  # Use THA4 Student model
+        tha4_student_model: str = None  # Student model name
         ):
     support_trt = False
     if use_tensorrt:
@@ -65,7 +67,14 @@ def get_core(
         print(f'Using device {pycuda.autoinit.device.name()}')
 
     # Determine model directory based on THA version
-    if use_tha4:
+    if use_tha4_student and tha4_student_model:
+        # THA4 Student: Use data/models/custom_tha4_models/{model_name}
+        tha_model_dir = os.path.join(
+            '.', 'data', 'models', 'custom_tha4_models',
+            tha4_student_model)
+        print(f'THA4 Student Mode - Model: {tha4_student_model}')
+        print(f'THA4 Student Mode - Model Path: {tha_model_dir}')
+    elif use_tha4:
         # THA4: Use data/models/tha4 directory with precision selection
         tha_model_dir = os.path.join(
             '.', 'data', 'models', 'tha4',
@@ -115,35 +124,64 @@ def get_core(
     core = None
     if use_tensorrt:
         from ezvtb_rt.core import CoreTRT
-        core = CoreTRT(
-            tha_model_version='v4' if use_tha4 else 'v3',
-            tha_model_seperable=model_seperable,
-            tha_model_fp16=model_half,
-            rife_model_enable=use_interpolation,
-            rife_model_scale=interpolation_scale,
-            rife_model_fp16=interpolation_half,
-            sr_model_enable=use_sr,
-            sr_model_scale=4 if sr_x4 else 2,
-            sr_model_noise=sr_noise,
-            sr_model_fp16=sr_half,
-            vram_cache_size=model_cache_size,
-            cache_max_giga=cacher_ram_size,
-            use_eyebrow=model_use_eyebrow)
+        if use_tha4_student and tha4_student_model:
+            core = CoreTRT(
+                tha_model_version='v4_student',
+                tha_model_name=tha4_student_model,
+                rife_model_enable=use_interpolation,
+                rife_model_scale=interpolation_scale,
+                rife_model_fp16=interpolation_half,
+                sr_model_enable=use_sr,
+                sr_model_scale=4 if sr_x4 else 2,
+                sr_model_noise=sr_noise,
+                sr_model_fp16=sr_half,
+                vram_cache_size=model_cache_size,
+                cache_max_giga=cacher_ram_size,
+                use_eyebrow=model_use_eyebrow)
+        else:
+            core = CoreTRT(
+                tha_model_version='v4' if use_tha4 else 'v3',
+                tha_model_seperable=model_seperable,
+                tha_model_fp16=model_half,
+                rife_model_enable=use_interpolation,
+                rife_model_scale=interpolation_scale,
+                rife_model_fp16=interpolation_half,
+                sr_model_enable=use_sr,
+                sr_model_scale=4 if sr_x4 else 2,
+                sr_model_noise=sr_noise,
+                sr_model_fp16=sr_half,
+                vram_cache_size=model_cache_size,
+                cache_max_giga=cacher_ram_size,
+                use_eyebrow=model_use_eyebrow)
     else:
         from ezvtb_rt.core_ort import CoreORT
-        core = CoreORT(
-            tha_model_version='v4' if use_tha4 else 'v3',
-            tha_model_seperable=model_seperable,
-            tha_model_fp16=model_half,
-            rife_model_enable=use_interpolation,
-            rife_model_scale=interpolation_scale,
-            rife_model_fp16=interpolation_half,
-            sr_model_enable=use_sr,
-            sr_model_scale=4 if sr_x4 else 2,
-            sr_model_noise=sr_noise,
-            sr_model_fp16=sr_half,
-            cache_max_giga=cacher_ram_size,
-            use_eyebrow=model_use_eyebrow)
+        if use_tha4_student and tha4_student_model:
+            core = CoreORT(
+                tha_model_version='v4_student',
+                tha_model_name=tha4_student_model,
+                rife_model_enable=use_interpolation,
+                rife_model_scale=interpolation_scale,
+                rife_model_fp16=interpolation_half,
+                sr_model_enable=use_sr,
+                sr_model_scale=4 if sr_x4 else 2,
+                sr_model_noise=sr_noise,
+                sr_model_fp16=sr_half,
+                cache_max_giga=cacher_ram_size,
+                use_eyebrow=model_use_eyebrow)
+        else:
+            core = CoreORT(
+                tha_model_version='v4' if use_tha4 else 'v3',
+                tha_model_seperable=model_seperable,
+                tha_model_fp16=model_half,
+                rife_model_enable=use_interpolation,
+                rife_model_scale=interpolation_scale,
+                rife_model_fp16=interpolation_half,
+                sr_model_enable=use_sr,
+                sr_model_scale=4 if sr_x4 else 2,
+                sr_model_noise=sr_noise,
+                sr_model_fp16=sr_half,
+                cache_max_giga=cacher_ram_size,
+                use_eyebrow=model_use_eyebrow)
 
     return core
     

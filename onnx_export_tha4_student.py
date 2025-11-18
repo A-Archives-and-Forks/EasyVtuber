@@ -73,13 +73,17 @@ elif not torch.cuda.is_available():
 else:
     DEVICE_NAME = 'cuda:0'
 
-IMAGE_INPUT = os.path.join('.', 'data', 'images', 'character.png')
+# Use image from model folder
+MODEL_BASE_PATH = join('.', 'data', 'models', 'custom_tha4_models', MODEL_NAME)
+IMAGE_INPUT = os.path.join(MODEL_BASE_PATH, 'character.png')
 
-# Create output directories
-TMP_DIR = join('.', 'onnx_model_tha4_student', MODEL_NAME, 'tmp')
+if not os.path.exists(IMAGE_INPUT):
+    raise FileNotFoundError(f"Image not found: {IMAGE_INPUT}")
+
+# Create output directories (save models in the model folder)
+TMP_DIR = join(MODEL_BASE_PATH, 'tmp')
 Path(TMP_DIR).mkdir(parents=True, exist_ok=True)
-MODEL_DIR = join('.', 'onnx_model_tha4_student', MODEL_NAME, 'fp32' if not HALF else 'fp16')
-Path(MODEL_DIR).mkdir(parents=True, exist_ok=True)
+MODEL_DIR = MODEL_BASE_PATH  # Save directly in model folder
 TMP_FILE_WRITE = join(TMP_DIR, 'tmp.onnx')
 
 validation_device = torch.device(DEVICE_NAME)
@@ -107,11 +111,10 @@ def numpy_linear_to_srgb(x):
     return np.where(x <= 0.003130804953560372, x * 12.92, 1.055 * (x ** (1.0 / 2.4)) - 0.055)
 
 # Load THA4 Student Model (mode_14: 2-step architecture)
-def load_tha4_student_poser(device: torch.device, use_half: bool, model_name: str):
+def load_tha4_student_poser(device: torch.device, use_half: bool, model_base_path: str):
     from tha4.poser.modes.mode_14 import create_poser
     
     # Model file paths
-    model_base_path = join('.', 'data', 'models', 'custom_tha4_models', model_name)
     m_files = {
         'face_morpher': join(model_base_path, 'face_morpher.pt'),
         'body_morpher': join(model_base_path, 'body_morpher.pt')
@@ -130,14 +133,14 @@ def load_tha4_student_poser(device: torch.device, use_half: bool, model_name: st
     return poser
 
 # Load posers for validation and export
-validation_poser = load_tha4_student_poser(validation_device, HALF and DEVICE_NAME != 'cpu', MODEL_NAME)
+validation_poser = load_tha4_student_poser(validation_device, HALF and DEVICE_NAME != 'cpu', MODEL_BASE_PATH)
 if DEVICE_NAME == 'cpu':
     # If using CPU for validation, reuse the same poser for export
     export_poser = validation_poser
     print("Using same poser for validation and export (CPU mode)")
 else:
     # If using GPU for validation, load separate CPU poser for export
-    export_poser = load_tha4_student_poser(export_device, False, MODEL_NAME)
+    export_poser = load_tha4_student_poser(export_device, False, MODEL_BASE_PATH)
     
 pose_size = validation_poser.get_num_parameters()
 print(f"Pose parameters: {pose_size}")

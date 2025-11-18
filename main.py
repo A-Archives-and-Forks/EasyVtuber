@@ -350,6 +350,8 @@ class ModelClientProcess(Process):
         self.model = get_core(device_id=args.device_id,
                               use_tensorrt=args.use_tensorrt,
                               use_tha4=args.use_tha4,
+                              use_tha4_student=args.use_tha4_student,
+                              tha4_student_model=args.tha4_student_model,
 
                               model_seperable = args.model_seperable,
                               model_half=args.model_half, 

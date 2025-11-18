@@ -64,6 +64,8 @@ finally:
 p = None
 dirPath = 'data/images'
 characterList = []
+studentModelList = []
+studentModelCharacterMap = {}
 
 hasRTModel = False
 try:
@@ -82,7 +84,39 @@ def refreshList():
             characterList.append(item[:-4])
 
 
+def scanStudentModels():
+    """Scan custom_tha4_models directory for student models"""
+    global studentModelList, studentModelCharacterMap
+    studentModelList = []
+    studentModelCharacterMap = {}
+
+    custom_models_path = 'data/models/custom_tha4_models'
+    if os.path.exists(custom_models_path):
+        try:
+            for model_name in os.listdir(custom_models_path):
+                model_path = os.path.join(custom_models_path, model_name)
+                if os.path.isdir(model_path):
+                    # Check if it's a valid student model
+                    face_trt = os.path.join(model_path, 'face_morpher.trt')
+                    body_trt = os.path.join(model_path, 'body_morpher.trt')
+                    character_png = os.path.join(model_path,
+                                                 'character.png')
+                    has_trt = (os.path.exists(face_trt) and
+                               os.path.exists(body_trt))
+                    has_character = os.path.exists(character_png)
+
+                    if has_trt and has_character:
+                        studentModelList.append(model_name)
+                        studentModelCharacterMap[model_name] = model_name
+        except Exception:
+            pass
+
+    # Sort alphabetically
+    studentModelList.sort()
+
+
 refreshList()
+scanStudentModels()
 
 
 class OptionPanel(wx.Panel):
@@ -227,9 +261,23 @@ class LauncherPanel(wx.Panel):
                   choices=['10', '15', '20', '30', '60'])
         addOption('preset', title='Performance Preset', desc='性能预设，注意修改后会覆盖后续配置',
                   choices=['Low', 'Medium', 'High', 'Ultra', 'Custom'])
-        addOption('model_select', title='Model Select', desc='选择使用的模型\nStandard Full精度较高性能较低',
-                  choices=['Seperable Half', 'Seperable Full', 'Standard Half', 'Standard Full', 'THA4 Half', 'THA4 Full'],
-                  mapping=['seperable_half', 'seperable_full', 'standard_half', 'standard_full', 'tha4_half', 'tha4_full'])
+
+        # Build model_select choices
+        model_choices = ['Seperable Half', 'Seperable Full', 'Standard Half',
+                         'Standard Full', 'THA4 Half', 'THA4 Full']
+        model_mapping = ['seperable_half', 'seperable_full',
+                         'standard_half', 'standard_full', 'tha4_half',
+                         'tha4_full']
+
+        # Add student models if available
+        for student_model in studentModelList:
+            model_choices.append(f'THA4 Student ({student_model})')
+            model_mapping.append(f'tha4_student_{student_model}')
+
+        addOption('model_select', title='Model Select',
+                  desc='选择使用的模型\nStandard Full精度较高性能较低',
+                  choices=model_choices,
+                  mapping=model_mapping)
         addOption('ram_cache_size', title='RAM Cache Size', desc='分配内存缓存大小\n用于存储最终运算结果',
                   choices=['Off', '1GB', '2GB', '4GB', '8GB', '16GB'],
                   mapping=['0b', '1gb', '2gb', '4gb', '8gb', '16gb'])
@@ -307,17 +355,50 @@ class LauncherPanel(wx.Panel):
         self.optionDict['preset'].Bind(wx.EVT_CHOICE, presetChoice)
         presetChoice()
 
+        def onModelSelect(e=None):
+            """Handle model selection change"""
+            model_value = self.optionDict['model_select'].GetValue()
+            is_student_model = 'tha4_student_' in model_value
+
+            char_ctrl = self.optionDict['character']
+
+            if is_student_model:
+                # Disable character selection for student models
+                # Student models have their own built-in character
+                char_ctrl.control.Enable(False)
+                char_ctrl.control.SetToolTip(
+                    'Locked: Student model includes built-in character')
+            else:
+                # Re-enable character selection for non-student models
+                char_ctrl.control.Enable(True)
+                char_ctrl.control.SetToolTip(
+                    'Select a character from data/images')
+
+        self.optionDict['model_select'].Bind(
+            wx.EVT_CHOICE, onModelSelect)
+
+        # Check initial model selection and lock character if needed
+        onModelSelect()
+
         def onActivate(e):
             global characterList
             tName = self.optionDict['character'].GetValue()
             refreshList()
-            self.optionDict['character'].control.SetItems(characterList)
-            self.optionDict['character'].control.SetSelection(characterList.index(tName))
+            self.optionDict['character'].control.SetItems(
+                characterList)
+            try:
+                idx = characterList.index(tName)
+                self.optionDict['character'].control.SetSelection(idx)
+            except ValueError:
+                # Character not found, select first available
+                if characterList:
+                    self.optionDict['character'].control.SetSelection(0)
 
         if not hasRTModel:
             self.optionDict['use_tensorrt'].control.SetValue(False)
             self.optionDict['use_tensorrt'].control.Enable(False)
-            self.optionDict['use_tensorrt'].control.SetToolTip('需要先构建TensorRT模型')
+            self.optionDict['use_tensorrt'].control.SetToolTip(
+                '需要先构建TensorRT模型')
 
         self.frame.Bind(wx.EVT_ACTIVATE, onActivate)
 
@@ -411,7 +492,14 @@ class LauncherPanel(wx.Panel):
                     run_args.append('4')
 
             if args['model_select'] is not None:
-                if 'tha4' in args['model_select']:
+                if 'tha4_student_' in args['model_select']:
+                    # Student model: tha4_student_{model_name}
+                    model_name = args['model_select'].replace(
+                        'tha4_student_', '')
+                    run_args.append('--use_tha4_student')
+                    run_args.append('--tha4_student_model')
+                    run_args.append(model_name)
+                elif 'tha4' in args['model_select']:
                     run_args.append('--use_tha4')
                     if 'half' in args['model_select']:
                         run_args.append('--model_half')
