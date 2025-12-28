@@ -29,8 +29,8 @@ parser.add_argument('--alpha_split', action='store_true')
 parser.add_argument('--bongo', action='store_true')
 parser.add_argument('--extend_movement', action='store_true')
 
-parser.add_argument('--filter_min_cutoff', type=float, default=1.0)
-parser.add_argument('--filter_beta', type=float, default=0.0)
+parser.add_argument('--filter_min_cutoff', type=float, default=0.3)
+parser.add_argument('--filter_beta', type=float, default=1.0)
 
 parser.add_argument('--simplify', type=int, default=1)
 
@@ -49,7 +49,7 @@ parser.add_argument('--interpolation_half', action='store_true')
 parser.add_argument('--use_sr', action='store_true')
 parser.add_argument('--sr_x4', action='store_true')
 parser.add_argument('--sr_half', action='store_true')
-parser.add_argument('--anime4k', action='store_true')
+parser.add_argument('--sr_a4k', action='store_true')
 
 parser.add_argument('--cache', type=str, default='256mb')
 
@@ -78,12 +78,12 @@ if not args.cam_input and args.mouse_input is None \
     and args.ifm_input is None and args.osf_input is None:
     args.debug_input = True  # Default to debug input
 
-if args.use_sr:
-    args.anime4k = False  # Disable anime4k if SR is enabled
+if args.sr_a4k:
+    args.use_sr = True
 
 if args.output_spout2:
     args.alpha_split = False  # Disable alpha split for spout2 output
 
-args.model_output_size = 1024 if args.use_sr or args.anime4k else 512
+args.model_output_size = 1024 if args.use_sr else 512
 
 print("Arguments:", args)

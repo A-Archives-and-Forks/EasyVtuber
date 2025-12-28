@@ -38,6 +38,7 @@ def get_core(
         use_sr:bool = False,
         sr_x4:bool = True,
         sr_half:bool = True,
+        sr_a4k:bool = False,
         ):
     if use_tensorrt:
         try:
@@ -60,6 +61,7 @@ def get_core(
         sr_model_enable=use_sr,
         sr_model_scale=4 if sr_x4 else 2,
         sr_model_fp16=sr_half,
+        sr_a4k=sr_a4k,
 
         vram_cache_size=model_cache_size,
         cache_max_giga=cacher_ram_size,

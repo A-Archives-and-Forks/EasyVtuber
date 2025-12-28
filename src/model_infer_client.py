@@ -9,7 +9,6 @@ from .utils.channel_shared_mem import SharedMemoryExclusiveChannel
 from .utils.pose_simplify import pose_simplify
 from .utils.fps import FPS, Interval
 from typing import List
-import pyanime4k
 
 class ModelClientProcess(Process):
     def __init__(self, input_image, pose_position_shm: shared_memory.SharedMemory , input_fps):
@@ -48,14 +47,6 @@ class ModelClientProcess(Process):
             for i in range(args.interpolation_scale)
         ]
 
-        if args.anime4k:
-            self.a4k_processor = pyanime4k.Processor(
-                processor_type="opencl",
-                device=0,
-                model="acnet-gan"
-            )
-            print("Anime4K Loaded")
-
         model_infer_average_interval: Interval = Interval()
         pipeline_fps = FPS()
 
@@ -77,7 +68,9 @@ class ModelClientProcess(Process):
 
                             use_sr=args.use_sr,
                             sr_half=args.sr_half,
-                            sr_x4=args.sr_x4)
+                            sr_x4=args.sr_x4,
+                            sr_a4k=args.sr_a4k,
+                            )
         model.setImage(self.input_image)
         model_infer_average_interval.start()
         model.inference([np.zeros((1, 45), dtype=np.float32)])  # Warm up
@@ -172,20 +165,10 @@ class ModelClientProcess(Process):
                                 (0, 80),
                                 cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 1)
 
-            rgba_image = None
-            alpha_channel = None
-            rgb_channels = None
-
-            if args.anime4k or args.alpha_split:
-                rgba_image = cv2.cvtColor(bgra_image, cv2.COLOR_BGRA2RGBA)
-                alpha_channel = np.ascontiguousarray(rgba_image[:, :, 3])
-                rgb_channels = np.ascontiguousarray(rgba_image[:,:,:3]) 
-
-            if args.anime4k:
-                rgb_channels = self.a4k_processor(rgb_channels)
-                alpha_channel = cv2.resize(alpha_channel, None, fx=2, fy=2)
-                rgba_image = cv2.merge((rgb_channels, alpha_channel))
             if args.alpha_split:
+                rgba_image = cv2.cvtColor(bgra_image, cv2.COLOR_BGRA2RGBA)
+                alpha_channel = rgba_image[:, :, 3]
+                rgb_channels = rgba_image[:,:,:3]
                 alpha_image = cv2.cvtColor(alpha_channel, cv2.COLOR_GRAY2RGB)
                 rgb_channels = cv2.hconcat([rgb_channels, alpha_image])
 
@@ -193,18 +176,14 @@ class ModelClientProcess(Process):
                 if args.alpha_split:
                     bgr_channels = cv2.cvtColor(rgb_channels, cv2.COLOR_RGB2BGR)
                 else:
-                    if args.anime4k:
-                        bgr_channels = cv2.cvtColor(rgba_image, cv2.COLOR_RGBA2BGR)
-                    else:
-                        bgr_channels = cv2.cvtColor(bgra_image, cv2.COLOR_BGRA2BGR)
+                    bgr_channels = cv2.cvtColor(bgra_image, cv2.COLOR_BGRA2BGR)
                 ret.append(bgr_channels)
             elif args.output_virtual_cam:
-                if rgb_channels is None:
+                if not args.alpha_split:
                     rgb_channels = cv2.cvtColor(bgra_image, cv2.COLOR_BGRA2RGB)
-                if args.anime4k and not args.alpha_split:
-                    rgb_channels = cv2.cvtColor(rgba_image, cv2.COLOR_RGBA2RGB)
                 ret.append(rgb_channels)
             else:
+                rgba_image = cv2.cvtColor(bgra_image, cv2.COLOR_BGRA2RGBA)
                 ret.append(rgba_image)
         return ret
     

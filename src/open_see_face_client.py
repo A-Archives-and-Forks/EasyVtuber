@@ -135,7 +135,7 @@ class OSFClientProcess(Process):
             mouth_eye_vector[2] = 1 - data['leftEyeOpen']
             mouth_eye_vector[3] = 1 - data['rightEyeOpen']
 
-            mouth_eye_vector[14] = max(data['MouthOpen'], 0) * 1.5 # Open larger mouth
+            mouth_eye_vector[14] = max(data['MouthOpen'], 0) * 2 # Open larger mouth
             # print(mouth_eye_vector[14])
 
             mouth_eye_vector[25] = iris_x_filter(-data['eyeRotationY'] * 3 - (data['rotationX']) / 57.3 * 1.5, timestamp=time.perf_counter())

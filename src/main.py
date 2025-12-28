@@ -10,6 +10,7 @@ from .utils.timer_wait import wait_until
 from PIL import Image
 from .utils.fps import FPS
 import pyvirtualcam
+from OpenGL.GL import GL_RGBA
 
 
 def main():
@@ -87,6 +88,10 @@ def main():
                                     backend='obs',
                                     fmt=pyvirtualcam.PixelFormat.RGB)
         print(f'Using virtual camera: {virtual_cam.device}')
+    elif args.output_spout2:
+        from PySpout import SpoutSender
+        spout_sender = SpoutSender("EasyVtuber", cam_width_scale * args.model_output_size,
+                                 args.model_output_size, GL_RGBA)
     else:
         print("Using OpenCV windows for output display.")
 
@@ -99,14 +104,16 @@ def main():
         for i in range(args.interpolation_scale):
             ret_batch_shm_channels[i].acquire()
         for i in range(args.interpolation_scale):
-            wait_until(last_time + interval)
-            last_time += interval
-
             if args.output_virtual_cam:
                 virtual_cam.send(np_ret_shms[i])
+            elif args.output_spout2:
+                spout_sender.send_image(np_ret_shms[i], False)
             else:
                 cv2.imshow("Output Frame Batch {}".format(i), np_ret_shms[i])
                 cv2.waitKey(1)
+            
+            wait_until(last_time + interval)
+            last_time += interval
             ret_batch_shm_channels[i].release()
         print("pipeline FPS: {:.2f}, Input FPS: {:.2f}, Model Avg Interval: {:.2f} ms, Cache Hit Ratio: {:.2f}%, GPU Cache Hit Ratio: {:.2f}%, current time {:.5f}".format(
             infer_process.pipeline_fps_number.value,
