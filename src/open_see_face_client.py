@@ -3,7 +3,7 @@ from .args import args
 import socket
 import struct
 import numpy as np
-from .utils.channel_shared_mem import SharedMemoryExclusiveChannel
+from .utils.shared_mem_guard import SharedMemoryGuard
 from .utils.fps import FPS
 from .utils.filter import OneEuroFilterNumpy
 from OneEuroFilter import OneEuroFilter
@@ -18,7 +18,7 @@ class OSFClientProcess(Process):
         self.fps = Value('f', 0.0)
 
     def run(self):
-        pose_position_shm_channel = SharedMemoryExclusiveChannel(self.pose_position_shm, ctrl_name="pose_position_shm_ctrl")
+        pose_position_shm_guard = SharedMemoryGuard(self.pose_position_shm, ctrl_name="pose_position_shm_ctrl")
         np_pose_shm = np.ndarray((45,), dtype=np.float32, buffer=self.pose_position_shm.buf[:45 * 4])
         np_position_shm = np.ndarray((4,), dtype=np.float32, buffer=self.pose_position_shm.buf[45 * 4:45 * 4 + 4 * 4])
         
@@ -42,8 +42,8 @@ class OSFClientProcess(Process):
 
         pose_filter = OneEuroFilterNumpy(freq=input_fps.view(), mincutoff=args.filter_min_cutoff, beta=args.filter_beta)
         position_filter = OneEuroFilterNumpy(freq=input_fps.view(), mincutoff=args.filter_min_cutoff, beta=args.filter_beta)
-        iris_x_filter = OneEuroFilter(freq=input_fps.view(), mincutoff=0.1, beta=0.3) # extra filter for iris movement
-        iris_y_filter = OneEuroFilter(freq=input_fps.view(), mincutoff=0.1, beta=0.3) # extra filter for iris movement
+        iris_x_filter = OneEuroFilter(freq=input_fps.view(), mincutoff=0.001, beta=1.0) # extra filter for iris movement
+        iris_y_filter = OneEuroFilter(freq=input_fps.view(), mincutoff=0.001, beta=1.0) # extra filter for iris movement
         rotation_offset = None
         print("OpenSeeFace Input Running at {:.2f} FPS".format(input_fps.view()))
         while True:
@@ -166,7 +166,7 @@ class OSFClientProcess(Process):
             model_input_arr.extend(mouth_eye_vector)
             model_input_arr.extend(pose_vector)
 
-            with pose_position_shm_channel.lock():
+            with pose_position_shm_guard.lock():
                 np_pose_shm[:] = pose_filter(np.array(model_input_arr, dtype=np.float32))
                 np_position_shm[:] = position_filter(np.array(position_vector, dtype=np.float32))
                 # np_pose_shm[:] = np.array(model_input_arr, dtype=np.float32)

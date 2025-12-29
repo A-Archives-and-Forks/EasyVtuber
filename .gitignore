@@ -1,7 +1,7 @@
 pretrained/**
 !pretrained/PUT_MODEL_HERE
 character
-src
+!src
 !tha4/src
 tha4/distiller-ui-doc
 tha4/docs

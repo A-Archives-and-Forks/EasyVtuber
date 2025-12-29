@@ -29,8 +29,8 @@ parser.add_argument('--alpha_split', action='store_true')
 parser.add_argument('--bongo', action='store_true')
 parser.add_argument('--extend_movement', action='store_true')
 
-parser.add_argument('--filter_min_cutoff', type=float, default=0.3)
-parser.add_argument('--filter_beta', type=float, default=1.0)
+parser.add_argument('--filter_min_cutoff', type=float, default=10.0)
+parser.add_argument('--filter_beta', type=float, default=0.3)
 
 parser.add_argument('--simplify', type=int, default=1)
 
@@ -85,5 +85,3 @@ if args.output_spout2:
     args.alpha_split = False  # Disable alpha split for spout2 output
 
 args.model_output_size = 1024 if args.use_sr else 512
-
-print("Arguments:", args)

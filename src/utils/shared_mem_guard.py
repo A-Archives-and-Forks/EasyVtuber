@@ -46,7 +46,7 @@ MUTEX_ALL_ACCESS = 0x1F0001
 ERROR_ALREADY_EXISTS = 183
 
 
-class SharedMemoryExclusiveChannel:
+class SharedMemoryGuard:
     """
     Two-process exclusive access wrapper using Windows Named Mutex:
     - payload SharedMemory is provided externally

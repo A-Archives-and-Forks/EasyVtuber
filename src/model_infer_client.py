@@ -5,7 +5,7 @@ import numpy as np
 import time
 from .ezvtb_rt_interface import get_core
 from .args import args
-from .utils.channel_shared_mem import SharedMemoryExclusiveChannel
+from .utils.shared_mem_guard import SharedMemoryGuard
 from .utils.pose_simplify import pose_simplify
 from .utils.fps import FPS, Interval
 from typing import List
@@ -32,12 +32,12 @@ class ModelClientProcess(Process):
         self.finish_event = Event()
 
     def run(self):
-        pose_position_shm_channel = SharedMemoryExclusiveChannel(self.pose_position_shm, ctrl_name="pose_position_shm_ctrl")
+        pose_position_shm_guard = SharedMemoryGuard(self.pose_position_shm, ctrl_name="pose_position_shm_ctrl")
         np_pose_shm = np.ndarray((45,), dtype=np.float32, buffer=self.pose_position_shm.buf[:45 * 4])
         np_position_shm = np.ndarray((4,), dtype=np.float32, buffer=self.pose_position_shm.buf[45 * 4:45 * 4 + 4 * 4])
         
-        ret_batch_shm_channels = [
-            SharedMemoryExclusiveChannel(self.ret_shared_mem, ctrl_name=f"ret_shm_ctrl_batch_{i}")
+        ret_batch_shm_guard = [
+            SharedMemoryGuard(self.ret_shared_mem, ctrl_name=f"ret_shm_ctrl_batch_{i}")
             for i in range(args.interpolation_scale)
         ]
         np_ret_shms = [
@@ -81,7 +81,7 @@ class ModelClientProcess(Process):
 
         print("Model Inference Ready")
         while True:
-            with pose_position_shm_channel.lock():
+            with pose_position_shm_guard.lock():
                 np_pose = np_pose_shm.copy()
                 np_position = np_position_shm.copy()
 
@@ -116,7 +116,7 @@ class ModelClientProcess(Process):
 
             self.pipeline_fps_number.value = pipeline_fps()
             for i in range(args.interpolation_scale):
-                with ret_batch_shm_channels[i].lock(): # get pressure from main process if ret not consumed
+                with ret_batch_shm_guard[i].lock(): # get pressure from main process if ret not consumed
                     np_ret_shms[i][:, :, :] = output_images[i]
 
             self.finish_event.set() # Back pressure main process loop if infer slow

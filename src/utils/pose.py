@@ -12,9 +12,9 @@ from mediapipe.python.solutions.face_mesh_connections import FACEMESH_RIGHT_EYEB
 from mediapipe.python.solutions.face_mesh_connections import FACEMESH_RIGHT_IRIS
 from mediapipe.python.solutions.face_mesh_connections import FACEMESH_TESSELATION
 
-from facial_points import MOUTH_TOP, MOUTH_BOTTOM, MOUTH_LEFT1, MOUTH_LEFT2, MOUTH_RIGHT
-from facial_points import IRIS_L_TOP, IRIS_L_BOTTOM, IRIS_L_LEFT, IRIS_L_RIGHT
-from facial_points import IRIS_R_TOP, IRIS_R_BOTTOM, IRIS_R_LEFT, IRIS_R_RIGHT
+from .facial_points import MOUTH_TOP, MOUTH_BOTTOM, MOUTH_LEFT1, MOUTH_LEFT2, MOUTH_RIGHT
+from .facial_points import IRIS_L_TOP, IRIS_L_BOTTOM, IRIS_L_LEFT, IRIS_L_RIGHT
+from .facial_points import IRIS_R_TOP, IRIS_R_BOTTOM, IRIS_R_LEFT, IRIS_R_RIGHT
 from .utils import get_distance
 
 

@@ -3,9 +3,7 @@ import numpy as np
 import time
 import math
 from .utils.timer_wait import wait_until
-from .utils.channel_shared_mem import SharedMemoryExclusiveChannel
-from .utils.filter import OneEuroFilterNumpy
-from .args import args
+from .utils.shared_mem_guard import SharedMemoryGuard
 
 class DebugInputClientProcess(Process):
     def __init__(self, pose_position_shm: shared_memory.SharedMemory):
@@ -16,12 +14,10 @@ class DebugInputClientProcess(Process):
     def run(self):
         last_time : float = time.perf_counter()
         interval : float = 1.0 / 60 # 60 FPS
-        pose_position_shm_channel = SharedMemoryExclusiveChannel(self.pose_position_shm, ctrl_name="pose_position_shm_ctrl")
+        pose_position_shm_guard = SharedMemoryGuard(self.pose_position_shm, ctrl_name="pose_position_shm_ctrl")
         np_pose_shm = np.ndarray((45,), dtype=np.float32, buffer=self.pose_position_shm.buf[:45 * 4])
         np_position_shm = np.ndarray((4,), dtype=np.float32, buffer=self.pose_position_shm.buf[45 * 4:45 * 4 + 4 * 4])
         
-        pose_filter = OneEuroFilterNumpy(freq=60, mincutoff=args.filter_min_cutoff, beta=args.filter_beta)
-        position_filter = OneEuroFilterNumpy(freq=60, mincutoff=args.filter_min_cutoff, beta=args.filter_beta)
         while True:
             eyebrow_vector = [0.0] * 12
             mouth_eye_vector = [0.0] * 27
@@ -53,8 +49,8 @@ class DebugInputClientProcess(Process):
             position_vector[2] = math.sin(time.perf_counter() * 0.7) * 0.1
             position_vector[3] = 1
 
-            with pose_position_shm_channel.lock():
-                np_pose_shm[:] = pose_filter(np.array(model_input_arr, dtype=np.float32))
-                np_position_shm[:] = position_filter(np.array(position_vector, dtype=np.float32))
+            with pose_position_shm_guard.lock():
+                np_pose_shm[:] = np.array(model_input_arr, dtype=np.float32)
+                np_position_shm[:] = np.array(position_vector, dtype=np.float32)
             wait_until(last_time + interval)
             last_time += interval

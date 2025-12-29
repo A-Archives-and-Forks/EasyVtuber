@@ -3,8 +3,7 @@ from pynput.mouse import Controller
 import numpy as np
 import time
 from .args import args
-from .utils.filter import OneEuroFilterNumpy
-from .utils.channel_shared_mem import SharedMemoryExclusiveChannel
+from .utils.shared_mem_guard import SharedMemoryGuard
 from .utils.timer_wait import wait_until
 
 class MouseClientProcess(Process):
@@ -15,7 +14,7 @@ class MouseClientProcess(Process):
 
     def run(self):
         mouse = Controller()
-        pose_position_shm_channel = SharedMemoryExclusiveChannel(self.pose_position_shm, ctrl_name="pose_position_shm_ctrl")
+        pose_position_shm_guard = SharedMemoryGuard(self.pose_position_shm, ctrl_name="pose_position_shm_ctrl")
         np_pose_shm = np.ndarray((45,), dtype=np.float32, buffer=self.pose_position_shm.buf[:45 * 4])
         np_position_shm = np.ndarray((4,), dtype=np.float32, buffer=self.pose_position_shm.buf[45 * 4:45 * 4 + 4 * 4])
         
@@ -35,7 +34,6 @@ class MouseClientProcess(Process):
         interval : float = 1.0 / 60 # 60 FPS
 
         print("Mouse Input Running at 60 FPS")
-        pose_filter = OneEuroFilterNumpy(freq=60, mincutoff=args.filter_min_cutoff, beta=args.filter_beta)
         position_vector = np.array([0, 0, 0, 1], dtype=np.float32)
         while True:
             pos = mouse.position
@@ -93,8 +91,8 @@ class MouseClientProcess(Process):
             model_input_arr.extend(mouth_eye_vector)
             model_input_arr.extend(pose_vector)
 
-            with pose_position_shm_channel.lock():
-                np_pose_shm[:] = pose_filter(np.array(model_input_arr, dtype=np.float32))
+            with pose_position_shm_guard.lock():
+                np_pose_shm[:] = np.array(model_input_arr, dtype=np.float32)
                 np_position_shm[:] = position_vector
 
             wait_until(last_time + interval)

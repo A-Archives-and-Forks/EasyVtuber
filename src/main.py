@@ -4,7 +4,7 @@ from .model_infer_client import ModelClientProcess
 from .args import args
 from .utils.preprocess import resize_to_512_center, apply_color_curves
 import cv2
-from .utils.channel_shared_mem import SharedMemoryExclusiveChannel
+from .utils.shared_mem_guard import SharedMemoryGuard
 from multiprocessing import shared_memory
 from .utils.timer_wait import wait_until
 from PIL import Image
@@ -68,7 +68,7 @@ def main():
     cam_width_scale = 2 if args.alpha_split else 1
     ret_channels = 3 if args.output_virtual_cam or args.output_debug else 4
     ret_batch_shm_channels = [
-        SharedMemoryExclusiveChannel(infer_process.ret_shared_mem, ctrl_name=f"ret_shm_ctrl_batch_{i}")
+        SharedMemoryGuard(infer_process.ret_shared_mem, ctrl_name=f"ret_shm_ctrl_batch_{i}")
         for i in range(args.interpolation_scale)
     ]
     np_ret_shms = [
@@ -109,26 +109,20 @@ def main():
             elif args.output_spout2:
                 spout_sender.send_image(np_ret_shms[i], False)
             else:
-                cv2.imshow("Output Frame Batch {}".format(i), np_ret_shms[i])
+                cv2.imshow("EasyVtuber Debug Frame", np_ret_shms[i])
                 cv2.waitKey(1)
             
             wait_until(last_time + interval)
             last_time += interval
             ret_batch_shm_channels[i].release()
-        print("pipeline FPS: {:.2f}, Input FPS: {:.2f}, Model Avg Interval: {:.2f} ms, Cache Hit Ratio: {:.2f}%, GPU Cache Hit Ratio: {:.2f}%, current time {:.5f}".format(
+        print("Infer Process FPS: {:.2f}, Input FPS: {:.2f}, Model Avg Interval: {:.2f} ms, Cache Hit Ratio: {:.2f}%, GPU Cache Hit Ratio: {:.2f}%, Output Pipeline FPS {:.5f}".format(
             infer_process.pipeline_fps_number.value,
             input_fps.value,
             infer_process.average_model_interval.value * 1000,
             infer_process.cache_hit_ratio.value * 100,
             infer_process.gpu_cache_hit_ratio.value * 100,
-            pipeline_fps()
+            pipeline_fps() * args.interpolation_scale
         ), end ='\r', flush=True)
-            
-        
-        
-        
-        
-
 
 if __name__ == "__main__":
     main()

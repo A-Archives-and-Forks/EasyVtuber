@@ -3,7 +3,7 @@ from multiprocessing import Process, shared_memory, Value
 import cv2
 import numpy as np
 from .args import args
-from .utils.channel_shared_mem import SharedMemoryExclusiveChannel
+from .utils.shared_mem_guard import SharedMemoryGuard
 from .utils.pose import get_pose
 from .utils.fps import FPS
 from .utils.filter import OneEuroFilterNumpy
@@ -19,7 +19,7 @@ class FaceMeshClientProcess(Process):
 
     def run(self):
         facemesh = mp.solutions.face_mesh.FaceMesh(refine_landmarks=True)
-        pose_position_shm_channel = SharedMemoryExclusiveChannel(self.pose_position_shm, ctrl_name="pose_position_shm_ctrl")
+        pose_position_shm_guard = SharedMemoryGuard(self.pose_position_shm, ctrl_name="pose_position_shm_ctrl")
         np_pose_shm = np.ndarray((45,), dtype=np.float32, buffer=self.pose_position_shm.buf[:45 * 4])
         np_position_shm = np.ndarray((4,), dtype=np.float32, buffer=self.pose_position_shm.buf[45 * 4:45 * 4 + 4 * 4])
         
@@ -70,7 +70,7 @@ class FaceMeshClientProcess(Process):
             mouth_eye_vector[2] = min(eye_l_h_temp, eye_r_h_temp)
             mouth_eye_vector[3] = min(eye_l_h_temp, eye_r_h_temp)
 
-            mouth_eye_vector[14] = mouth_ratio * 1.5
+            mouth_eye_vector[14] = mouth_ratio * 2.0
 
             mouth_eye_vector[25] = 0.0 # keep iris stable for user demo
             mouth_eye_vector[26] = 0.0
@@ -86,6 +86,6 @@ class FaceMeshClientProcess(Process):
             model_input_arr.extend(mouth_eye_vector)
             model_input_arr.extend(pose_vector)
 
-            with pose_position_shm_channel.lock():
+            with pose_position_shm_guard.lock():
                 np_pose_shm[:] = pose_filter(np.array(model_input_arr, dtype=np.float32))
                 np_position_shm[:] = position_vector

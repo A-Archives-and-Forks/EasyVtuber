@@ -39,14 +39,12 @@ default_arg = {
     'is_alpha_clean': False,
     'is_eyebrow': False,
     'cache_simplify': 'High',
-    'cache_compression': 'High',
     'ram_cache_size': '2gb',
     'vram_cache_size': '2gb',
     'model_select': 'seperable_half',
     'interpolation': 'x2_half',
     'frame_rate_limit': '30',
     'sr': 'Off',
-    'device_id': '0',
     'use_tensorrt': False,
     'preset': 'Medium'
 }
@@ -249,10 +247,9 @@ class LauncherPanel(wx.Panel):
         addOption('osf', title='OpenSeeFace IP:Port', desc='输入OpenSeeFace连接使用的IP:端口号', type=2)
 
         addOption('output', title='Output', desc='选择输出目标',
-                  choices=['Spout2', 'OBS VirtualCam', 'UnityCapture', 'Debug Output'],
-                  mapping=[3, 1, 0, 2])
+                  choices=['Spout2', 'OBS VirtualCam', 'Debug Output'],
+                  mapping=[0, 1, 2])
 
-        addOption('device_id', title='GPU Device', desc='选择需要使用的计算设备(默认0)', choices=['0', '1', '2', '3'])
         addOption('use_tensorrt', title='TensorRT',
                   desc='运行过预构建脚本后开启TensorRT可进一步提升性能\n（未构建成功时不可用，仅NVIDIA显卡支持）',
                   type=1)
@@ -287,9 +284,6 @@ class LauncherPanel(wx.Panel):
         addOption('cache_simplify', title='Input Simplify',
                   desc='设置输入简化级别\n输入越简化，缓存命中率越高，动作越不平滑',
                   choices=['Off', 'Low', 'Medium', 'High', 'Higher', 'Highest', 'Gaming'])
-        addOption('cache_compression', title='JPEG Compression',
-                  desc='设置内存缓存压缩等级\n压缩等级越高，缓存命中率越高，输出质量越差',
-                  choices=['Off', 'Low', 'Medium', 'High'])
 
         addOption('sr', title='SuperResolution', desc='选择使用的超分模型\n由于性能原因，real-esrgan会进行裁切',
                   choices=['Off', 'anime4k_x2', 'waifu2x_x2_half', 'real-esrgan_x4_half', 'waifu2x_x2_full',
@@ -332,13 +326,12 @@ class LauncherPanel(wx.Panel):
                 self.optionDict['ram_cache_size'],
                 self.optionDict['vram_cache_size'],
                 self.optionDict['cache_simplify'],
-                self.optionDict['cache_compression'],
             ]
             presets = {
-                'Low': [0, 1, 1, 5, 3],
-                'Medium': [1, 1, 1, 4, 2],
-                'High': [1, 2, 2, 2, 2],
-                'Ultra': [3, 3, 3, 1, 1]
+                'Low': [0, 1, 1, 5],
+                'Medium': [1, 1, 1, 4],
+                'High': [1, 2, 2, 2],
+                'Ultra': [3, 3, 3, 1]
             }
 
             if s == 'Custom':
@@ -418,18 +411,17 @@ class LauncherPanel(wx.Panel):
             p = None
             self.btnLaunch.SetLabelText("Save & Launch")
         else:
-            run_args = [sys.executable, 'main.py']
+            run_args = [sys.executable, '-m', 'src.main']
             if len(args['character']):
                 run_args.append('--character')
                 run_args.append(args['character'])
 
             if args['input'] == 0:
                 if len(args['ifm']):
-                    run_args.append('--ifm')
+                    run_args.append('--ifm_input')
                     run_args.append(args['ifm'])
             elif args['input'] == 1:
-                run_args.append('--input')
-                run_args.append('cam')
+                run_args.append('--cam_input')
             elif args['input'] == 2:
                 run_args.append('--debug_input')
             elif args['input'] == 3:
@@ -437,38 +429,30 @@ class LauncherPanel(wx.Panel):
                 run_args.append('0,0,' + str(wx.GetDisplaySize().width) + ',' + str(wx.GetDisplaySize().height))
             elif args['input'] == 4:
                 if len(args['osf']):
-                    run_args.append('--osf')
+                    run_args.append('--osf_input')
                     run_args.append(args['osf'])
 
             if args['output'] == 0:
-                run_args.append('--output_webcam')
-                run_args.append('unitycapture')
+                run_args.append('--output_spout2')
             elif args['output'] == 1:
-                run_args.append('--output_webcam')
-                run_args.append('obs')
-            elif args['output'] == 3:
-                run_args.append('--output_webcam')
-                run_args.append('spout')
+                run_args.append('--output_virtual_cam')
             elif args['output'] == 2:
-                run_args.append('--debug')
+                run_args.append('--output_debug')
+
             if args['is_alpha_split']:
                 run_args.append('--alpha_split')
             if args['is_extend_movement']:
                 run_args.append('--extend_movement')
-                run_args.append('1')
             if args['is_bongo']:
                 run_args.append('--bongo')
             if args['is_alpha_clean']:
                 run_args.append('--alpha_clean')
             if args['is_eyebrow']:
                 run_args.append('--eyebrow')
+
             if args['cache_simplify'] is not None:
                 run_args.append('--simplify')
                 run_args.append(str(cache_simplify_map[args['cache_simplify']]))
-                run_args.append('--cacher_quality')
-                run_args.append(str(cache_simplify_quality_map[args['cache_compression']]))
-                if args['cache_simplify'] != 'Off':
-                    run_args.append('--use_cacher')
             if args['ram_cache_size'] is not None:
                 run_args.append('--cache')
                 run_args.append(args['ram_cache_size'])
@@ -496,44 +480,37 @@ class LauncherPanel(wx.Panel):
                     # Student model: tha4_student_{model_name}
                     model_name = args['model_select'].replace(
                         'tha4_student_', '')
-                    run_args.append('--use_tha4_student')
-                    run_args.append('--tha4_student_model')
+                    run_args.append('--model_version')
+                    run_args.append('v4_student')
+                    run_args.append('--model_name')
                     run_args.append(model_name)
                 elif 'tha4' in args['model_select']:
-                    run_args.append('--use_tha4')
-                    if 'half' in args['model_select']:
-                        run_args.append('--model_half')
+                    run_args.append('--model_version')
+                    run_args.append('v4')
                 else:
-                    if 'seperable' in args['model_select']:
-                        run_args.append('--model_seperable')
-                    if 'half' in args['model_select']:
-                        run_args.append('--model_half')
+                    run_args.append('--model_version')
+                    run_args.append('v3')
+                if 'seperable' in args['model_select']:
+                    run_args.append('--model_seperable')
+                if 'half' in args['model_select']:
+                    run_args.append('--model_half')
 
             if args['frame_rate_limit'] is not None:
                 run_args.append('--frame_rate_limit')
                 run_args.append(args['frame_rate_limit'])
 
             if args['sr'] is not None and args['sr'] != 'Off':
+                run_args.append('--use_sr')
                 if 'anime4k' in args['sr']:
-                    run_args.append('--anime4k')
-                else:
-                    run_args.append('--use_sr')
-                    if 'x4' in args['sr']:
-                        run_args.append('--sr_x4')
-                    if 'half' in args['sr']:
-                        run_args.append('--sr_half')
-
-            if args['device_id'] is not None:
-                run_args.append('--device_id')
-                run_args.append(args['device_id'])
+                    run_args.append('--sr_a4k')
+                if 'x4' in args['sr']:
+                    run_args.append('--sr_x4')
+                if 'half' in args['sr']:
+                    run_args.append('--sr_half')
 
             if args['use_tensorrt'] is not None and args['use_tensorrt']:
                 run_args.append('--use_tensorrt')
-                run_args.append('--model_cache')
-                run_args.append('--model_vram_cache')
 
-            run_args.append('--output_size')
-            run_args.append('512x512')
             print('Launched: ' + ' '.join(run_args))
             p = subprocess.Popen(run_args)
             self.btnLaunch.SetLabelText('Stop')
