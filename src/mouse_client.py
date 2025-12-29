@@ -2,8 +2,12 @@ from multiprocessing import Process, shared_memory, Value
 from pynput.mouse import Controller
 import numpy as np
 import time
+import sounddevice as sd
 from .args import args
 from .utils.shared_mem_guard import SharedMemoryGuard
+from .utils.timer_wait import wait_until
+from OneEuroFilter import OneEuroFilter
+from .utils.fps import FPS
 from .utils.timer_wait import wait_until
 
 class MouseClientProcess(Process):
@@ -11,6 +15,27 @@ class MouseClientProcess(Process):
         super().__init__()
         self.pose_position_shm = pose_position_shm
         self.fps = Value('f', 60.0)
+        self.audio_volume = Value('f', 0.0)
+        self.audio_running = False
+        self.audio_callback_fps = FPS(60)
+
+    def audio_callback(self, indata, frames, time_info, status):
+        """音频回调函数，计算音量"""
+        if status:
+            print(f"Audio status: {status}")
+        
+        self.audio_callback_fps()
+        # 计算 RMS (均方根) 音量
+        volume_norm = np.linalg.norm(indata) * 10
+
+        # 应用阈值和灵敏度
+        if volume_norm < args.audio_threshold:
+            volume_norm = 0
+        else:
+            volume_norm = (volume_norm - args.audio_threshold) * args.audio_sensitivity
+        # 限制在 0-1 范围
+        volume_norm = np.clip(volume_norm, 0, 1)
+        self.audio_volume.value = volume_norm
 
     def run(self):
         mouse = Controller()
@@ -20,6 +45,29 @@ class MouseClientProcess(Process):
         
         # posLimit = [0, 0, 1920, 1080]
         posLimit = [int(x) for x in args.mouse_input.split(',')]
+        
+        if args.mouse_audio_input:
+            # 启动音频流 (使用 WASAPI)
+            try:
+                # 获取默认输入设备（麦克风或系统音频）
+                # 如果要捕获系统音频输出，需要使用 loopback 设备
+                audio_stream = sd.InputStream(
+                    callback=self.audio_callback,
+                    channels=1,
+                    samplerate=16000,
+                    blocksize=1024,
+                )
+                audio_stream.start()
+                self.audio_running = True
+                wait_until(time.perf_counter() + 1.0)  # 等待一秒以稳定音频输入
+                print("Audio capture started (WASAPI)")
+            except Exception as e:
+                print(f"Failed to start audio capture: {e}")
+                print("Continuing without audio input...")
+                self.audio_running = False
+
+        audio_filter = OneEuroFilter(freq=self.audio_callback_fps.view(), mincutoff=10.0, beta=0.0)
+        
         prev = {
             'eye_l_h_temp': 0,
             'eye_r_h_temp': 0,
@@ -41,10 +89,13 @@ class MouseClientProcess(Process):
             eye_limit = [0.8, 0.5]
             head_eye_reduce = 0.6
             head_slowness = 0.2
+            
+            # 获取音频音量并映射到 mouth_ratio
+            current_mouth_ratio = audio_filter(self.audio_volume.value, time.perf_counter()) if self.audio_running else 0
             mouse_data = {
                 'eye_l_h_temp': 0,
                 'eye_r_h_temp': 0,
-                'mouth_ratio': 0,
+                'mouth_ratio': current_mouth_ratio,
                 'eye_y_ratio': np.interp(pos[1], [posLimit[1], posLimit[3]], [1, -1]) * eye_limit[1],
                 'eye_x_ratio': np.interp(pos[0], [posLimit[0], posLimit[2]], [1, -1]) * eye_limit[0],
                 'x_angle': np.interp(pos[1], [posLimit[1], posLimit[3]], [1, -1]),

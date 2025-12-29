@@ -48,7 +48,10 @@ default_arg = {
     'frame_rate_limit': '30',
     'sr': 'anime4k_x2',
     'use_tensorrt': False,
-    'preset': 'Low'
+    'preset': 'Low',
+    'mouse_audio_input': False,
+    'audio_sensitivity': '0.02',
+    'audio_threshold': '10.0'
 }
 
 try:
@@ -211,14 +214,14 @@ class OptionPanel(wx.Panel):
             try:
                 if default is not None:
                     self.control.SetValue(default)
-                    self.valueLabel.SetLabelText(f"{mapper(default):.2f}")
+                    self.valueLabel.SetLabelText(f"{mapper(default):.4f}")
             except:
                 pass
             
             # Update label when slider changes
             def onSliderChange(event):
                 val = mapper(self.control.GetValue())
-                self.valueLabel.SetLabelText(f"{val:.2f}")
+                self.valueLabel.SetLabelText(f"{val:.4f}")
             self.control.Bind(wx.EVT_SLIDER, onSliderChange)
             
             sliderSizer.Add(self.control, 1, wx.ALIGN_CENTER_VERTICAL)
@@ -302,9 +305,12 @@ class LauncherPanel(wx.Panel):
         addOption('is_eyebrow', title='Eyebrow', desc='使用眉毛输入，对性能有一定影响\n仅支持iFacialMocap', type=1,
                   default=True)
         addOption('osf', title='OpenSeeFace IP:Port', desc='输入OpenSeeFace连接使用的IP:端口号', type=2)
+        addOption('mouse_audio_input', title='Audio Input', desc='启用WASAPI音频输入控制嘴部动作', type=1)
+        addOption('audio_sensitivity', title='Audio Sensitivity', desc='音频灵敏度，控制音频对嘴部动作的影响程度', type=2)
+        addOption('audio_threshold', title='Audio Threshold', desc='音频阈值，低于此值的音频将被忽略', type=2)
         addOption('min_cutoff', title='Min CutOff', desc='输入滤波频率截断，\n越小越平滑，越大静止时越灵敏', 
                   type=3, mapper=min_cutoff_mapper)
-        addOption('beta', title='Beta', desc='输入滤波速度补偿，\n越小越平滑，越大快速运动时越灵敏', 
+        addOption('beta', title='Beta', desc='输入滤波速度补偿，\n越小越平滑，越大运动时越灵敏', 
                   type=3, mapper=beta_mapper)
 
         addOption('output', title='Output', desc='选择输出目标',
@@ -379,12 +385,35 @@ class LauncherPanel(wx.Panel):
             else:
                 self.optionSizer.Show(self.optionDict['min_cutoff'])
                 self.optionSizer.Show(self.optionDict['beta'])
-
+            # Show/hide audio input options for Mouse Input (s == 3)
+            if s != 3:
+                self.optionSizer.Hide(self.optionDict['mouse_audio_input'])
+                self.optionSizer.Hide(self.optionDict['audio_sensitivity'])
+                self.optionSizer.Hide(self.optionDict['audio_threshold'])
+            else:
+                self.optionSizer.Show(self.optionDict['mouse_audio_input'])
+                # Update audio fields based on checkbox state
+                audioInputChoice()
 
             self.frame.fSizer.Layout()
             self.frame.Fit()
 
+        def audioInputChoice(e=None):
+            """Handle mouse_audio_input checkbox changes"""
+            enabled = self.optionDict['mouse_audio_input'].GetValue()
+            if enabled:
+                self.optionSizer.Show(self.optionDict['audio_sensitivity'])
+                self.optionSizer.Show(self.optionDict['audio_threshold'])
+                self.optionDict['audio_sensitivity'].control.Enable(True)
+                self.optionDict['audio_threshold'].control.Enable(True)
+            else:
+                self.optionSizer.Hide(self.optionDict['audio_sensitivity'])
+                self.optionSizer.Hide(self.optionDict['audio_threshold'])
+            self.frame.fSizer.Layout()
+            self.frame.Fit()
+
         self.optionDict['input'].Bind(wx.EVT_CHOICE, inputChoice)
+        self.optionDict['mouse_audio_input'].Bind(wx.EVT_CHECKBOX, audioInputChoice)
         inputChoice()
 
         def presetChoice(e=None):
@@ -495,6 +524,15 @@ class LauncherPanel(wx.Panel):
             elif args['input'] == 3:
                 run_args.append('--mouse_input')
                 run_args.append('0,0,' + str(wx.GetDisplaySize().width) + ',' + str(wx.GetDisplaySize().height))
+                # Add audio input options for mouse input
+                if args['mouse_audio_input']:
+                    run_args.append('--mouse_audio_input')
+                    if args['audio_sensitivity']:
+                        run_args.append('--audio_sensitivity')
+                        run_args.append(str(args['audio_sensitivity']))
+                    if args['audio_threshold']:
+                        run_args.append('--audio_threshold')
+                        run_args.append(str(args['audio_threshold']))
             elif args['input'] == 4:
                 if len(args['osf']):
                     run_args.append('--osf_input')

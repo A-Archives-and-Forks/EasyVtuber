@@ -21,6 +21,10 @@ parser.add_argument('--mouse_input', type=str)
 parser.add_argument('--ifm_input', type=str)
 parser.add_argument('--osf_input', type=str)
 
+parser.add_argument('--mouse_audio_input', action='store_true')
+parser.add_argument('--audio_sensitivity', type=float, default=0.02)
+parser.add_argument('--audio_threshold', type=float, default=10.0)
+
 parser.add_argument('--output_virtual_cam', action='store_true')
 parser.add_argument('--output_spout2', action='store_true')
 parser.add_argument('--output_debug', action='store_true')
