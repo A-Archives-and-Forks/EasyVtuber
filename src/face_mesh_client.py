@@ -67,8 +67,8 @@ class FaceMeshClientProcess(Process):
             mouth_eye_vector = [0.0] * 27
             pose_vector = [0.0] * 6
 
-            mouth_eye_vector[2] = min(eye_l_h_temp, eye_r_h_temp)
-            mouth_eye_vector[3] = min(eye_l_h_temp, eye_r_h_temp)
+            mouth_eye_vector[2] = max(eye_l_h_temp, eye_r_h_temp)
+            mouth_eye_vector[3] = max(eye_l_h_temp, eye_r_h_temp)
 
             mouth_eye_vector[14] = mouth_ratio * 2.0
 

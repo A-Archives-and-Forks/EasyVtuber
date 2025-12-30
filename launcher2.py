@@ -51,7 +51,9 @@ default_arg = {
     'preset': 'Low',
     'mouse_audio_input': False,
     'audio_sensitivity': '0.02',
-    'audio_threshold': '10.0'
+    'audio_threshold': '10.0',
+    'blink_interval': '5.0',
+    'breath_cycle': 'inf'
 }
 
 try:
@@ -308,10 +310,17 @@ class LauncherPanel(wx.Panel):
         addOption('mouse_audio_input', title='Audio Input', desc='启用WASAPI音频输入控制嘴部动作', type=1)
         addOption('audio_sensitivity', title='Audio Sensitivity', desc='音频灵敏度，控制音频对嘴部动作的影响程度', type=2)
         addOption('audio_threshold', title='Audio Threshold', desc='音频阈值，低于此值的音频将被忽略', type=2)
+        addOption('blink_interval', title='Blink Interval', desc='设置眨眼间隔时间',
+                  choices=['No Blink', '3 seconds', '5 seconds', '7 seconds'],
+                  mapping=['inf', '3.0', '5.0', '7.0'])
         addOption('min_cutoff', title='Min CutOff', desc='输入滤波频率截断，\n越小越平滑，越大静止时越灵敏', 
                   type=3, mapper=min_cutoff_mapper)
         addOption('beta', title='Beta', desc='输入滤波速度补偿，\n越小越平滑，越大运动时越灵敏', 
                   type=3, mapper=beta_mapper)
+
+        addOption('breath_cycle', title='Breath Cycle', desc='设置呼吸循环时间',
+                  choices=['No Breath', '3 seconds', '5 seconds', '7 seconds'],
+                  mapping=['inf', '3.0', '5.0', '7.0'])
 
         addOption('output', title='Output', desc='选择输出目标',
                   choices=['Spout2', 'OBS VirtualCam', 'Debug Output'],
@@ -390,8 +399,10 @@ class LauncherPanel(wx.Panel):
                 self.optionSizer.Hide(self.optionDict['mouse_audio_input'])
                 self.optionSizer.Hide(self.optionDict['audio_sensitivity'])
                 self.optionSizer.Hide(self.optionDict['audio_threshold'])
+                self.optionSizer.Hide(self.optionDict['blink_interval'])
             else:
                 self.optionSizer.Show(self.optionDict['mouse_audio_input'])
+                self.optionSizer.Show(self.optionDict['blink_interval'])
                 # Update audio fields based on checkbox state
                 audioInputChoice()
 
@@ -533,10 +544,19 @@ class LauncherPanel(wx.Panel):
                     if args['audio_threshold']:
                         run_args.append('--audio_threshold')
                         run_args.append(str(args['audio_threshold']))
+                # Add blink interval for mouse input
+                if args['blink_interval']:
+                    run_args.append('--blink_interval')
+                    run_args.append(str(args['blink_interval']))
             elif args['input'] == 4:
                 if len(args['osf']):
                     run_args.append('--osf_input')
                     run_args.append(args['osf'])
+
+            # Add breath cycle option
+            if args['breath_cycle']:
+                run_args.append('--breath_cycle')
+                run_args.append(str(args['breath_cycle']))
 
             if args['output'] == 0:
                 run_args.append('--output_spout2')
