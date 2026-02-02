@@ -1,8 +1,8 @@
 numpy
 scipy
 matplotlib
-protobuf==3.20.1
-pynput==1.7.6
+protobuf
+pynput
 mediapipe==0.10.11
 opencv_python
 Pillow
@@ -12,10 +12,8 @@ pyopengl
 wxpython
 onnx 
 onnxruntime-directml 
-turbojpeg 
 tqdm
 torch
 OneEuroFilter
 sounddevice
-pycuda
 brotli

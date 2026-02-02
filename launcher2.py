@@ -72,14 +72,14 @@ characterList = []
 studentModelList = []
 studentModelCharacterMap = {}
 
-hasRTModel = False
-try:
-    f = open('data/models/tha3/standard/fp16/decomposer.trt')
-    f.close()
-    hasRTModel = True
-except:
-    pass
-
+def is_nvidia_gpu():
+    try:
+        # 获取显卡名称列表
+        output = subprocess.check_output("wmic path Win32_VideoController get Name", shell=True).decode('gbk')
+        return "NVIDIA" in output.upper()
+    except Exception:
+        return False
+hasTRTSupport = is_nvidia_gpu()
 
 def refreshList():
     global characterList
@@ -303,8 +303,8 @@ class LauncherPanel(wx.Panel):
         addOption('input', title='Input Device', desc='选择希望使用的面捕数据源',
                   choices=['iFacialMocap', 'OpenSeeFace', 'OpenCV(Webcam)', 'Mouse Input', 'Debug Input'],
                   mapping=[0, 4, 1, 3, 2])
-        addOption('ifm', title='iFacialMocap IP:Port', desc='输入iFacialMocap连接使用的IP:端口号', type=2)
-        addOption('is_eyebrow', title='Eyebrow', desc='使用眉毛输入，对性能有一定影响\n仅支持iFacialMocap', type=1,
+        addOption('ifm', title='iFacialMocap IP', desc='输入iFacialMocap连接使用的IP地址，默认连接 49983 端口', type=2)
+        addOption('is_eyebrow', title='Eyebrow', desc='使用眉毛输入，对性能有一定影响', type=1,
                   default=True)
         addOption('osf', title='OpenSeeFace IP:Port', desc='输入OpenSeeFace连接使用的IP:端口号', type=2)
         addOption('mouse_audio_input', title='Audio Input', desc='启用WASAPI音频输入控制嘴部动作', type=1)
@@ -326,8 +326,8 @@ class LauncherPanel(wx.Panel):
                   choices=['Spout2', 'OBS VirtualCam', 'Debug Output'],
                   mapping=[0, 1, 2])
 
-        addOption('use_tensorrt', title='TensorRT',
-                  desc='运行过预构建脚本后开启TensorRT可进一步提升性能\n（未构建成功时不可用，仅NVIDIA显卡支持）',
+        addOption('use_tensorrt', title='TensorRT加速',
+                  desc='需要更长启动和预热时间（仅NVIDIA显卡支持）',
                   type=1)
 
         addOption('frame_rate_limit', title='FPS Limit', desc='选择帧率限制目标',
@@ -388,6 +388,7 @@ class LauncherPanel(wx.Panel):
                 self.optionSizer.Hide(self.optionDict['osf'])
             else:
                 self.optionSizer.Show(self.optionDict['osf'])
+                self.optionSizer.Show(self.optionDict['is_eyebrow'])
             if s != 1 and s != 4:
                 self.optionSizer.Hide(self.optionDict['min_cutoff'])
                 self.optionSizer.Hide(self.optionDict['beta'])
@@ -495,11 +496,11 @@ class LauncherPanel(wx.Panel):
                 if characterList:
                     self.optionDict['character'].control.SetSelection(0)
 
-        if not hasRTModel:
+        if not hasTRTSupport:
             self.optionDict['use_tensorrt'].control.SetValue(False)
             self.optionDict['use_tensorrt'].control.Enable(False)
             self.optionDict['use_tensorrt'].control.SetToolTip(
-                '需要先构建TensorRT模型')
+                '需要NVIDIA显卡支持才能使用TensorRT')
 
         self.frame.Bind(wx.EVT_ACTIVATE, onActivate)
 
@@ -527,7 +528,10 @@ class LauncherPanel(wx.Panel):
             if args['input'] == 0:
                 if len(args['ifm']):
                     run_args.append('--ifm_input')
-                    run_args.append(args['ifm'])
+                    if ':' in args['ifm']:
+                        run_args.append(args['ifm'])
+                    else:
+                        run_args.append(args['ifm'] + ':49983')
             elif args['input'] == 1:
                 run_args.append('--cam_input')
             elif args['input'] == 2:

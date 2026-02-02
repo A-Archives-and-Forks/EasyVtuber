@@ -16,8 +16,8 @@ class IFMClientProcess(Process):
     def __init__(self, pose_position_shm: shared_memory.SharedMemory):
         super().__init__()
         self.pose_position_shm = pose_position_shm
-        self.address = args.ifm.split(':')[0]
-        self.port = int(args.ifm.split(':')[1])
+        self.address = args.ifm_input.split(':')[0]
+        self.port = int(args.ifm_input.split(':')[1])
         self.fps = Value('f', 0.0)
     def run(self):
         pose_position_shm_guard = SharedMemoryGuard(self.pose_position_shm, ctrl_name="pose_position_shm_ctrl")
@@ -51,7 +51,8 @@ class IFMClientProcess(Process):
 
         # pose_filter = OneEuroFilterNumpy(freq=input_fps.view(), mincutoff=args.filter_min_cutoff, beta=args.filter_beta)
         # position_filter = OneEuroFilterNumpy(freq=input_fps.view(), mincutoff=args.filter_min_cutoff, beta=args.filter_beta)
-
+        # 呼吸循环参数
+        breath_start_time = time.perf_counter()
         print("iFacialMocap Input Running at {:.2f} FPS".format(input_fps.view()))
         while True:
             socket_bytes = self.socket.recv(8192)
@@ -69,6 +70,12 @@ class IFMClientProcess(Process):
                 print("iFacialMocap data parse error:", socket_string)
                 continue
 
+            # 计算呼吸效果（使用 sin 函数，在 breath_cycle 时间内从 0 到 1 再到 0）
+            breath_elapsed = (time.perf_counter() - breath_start_time) % args.breath_cycle
+            # 使用 sin 函数，让值在一个周期内从 0 -> 1 -> 0
+            # sin 在 0 到 π 之间从 0 到 1 到 0
+            breath_value = np.sin(breath_elapsed / args.breath_cycle * np.pi)
+
             ifacialmocap_pose_converted = ifm_converter.convert(data)
             position_vector = data[HEAD_BONE_QUAT]
 
@@ -83,6 +90,7 @@ class IFMClientProcess(Process):
                 pose_vector[i - 39] = ifacialmocap_pose_converted[i]
             pose_vector[3] = pose_vector[1]
             pose_vector[4] = pose_vector[2]
+            pose_vector[5] = breath_value
 
             mouth_eye_vector[14] = mouth_eye_vector[14] * 1.5
 

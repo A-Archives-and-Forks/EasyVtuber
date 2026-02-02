@@ -272,9 +272,9 @@ class BodyMorpherWrapper(Module):
         """
         # Convert image to normalized format
         img_f = img.to(export_dtype) / 255.0
-        img_f[:, :, :3] = torch_srgb_to_linear(img_f[:, :, :3])
-        img_f = img_f[:, :, [2, 1, 0, 3]]  # BGR to RGB
-        img_c = img_f.permute(2, 0, 1).unsqueeze(0) * 2.0 - 1.0
+        img_f[0, :, :, :3] = torch_srgb_to_linear(img_f[0, :, :, :3])
+        img_f = img_f[:, :, :, [2, 1, 0, 3]]  # BGR to RGB
+        img_c = img_f.permute(0, 3, 1, 2) * 2.0 - 1.0
         
         # Embed face morpher output into the full image
         center_x = 256
@@ -301,6 +301,7 @@ body_morpher_wrapper = BodyMorpherWrapper(export_modules['body_morpher']).eval()
 
 full_pose_export = torch.zeros(1, 45, dtype=export_dtype)
 
+cv_img_tensor_export = cv_img_tensor_export.unsqueeze(0)
 # Export
 with torch.no_grad():
     body_morpher_res_export = body_morpher_wrapper(cv_img_tensor_export, face_morpher_res_export, full_pose_export)

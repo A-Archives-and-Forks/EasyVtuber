@@ -38,7 +38,8 @@ class FaceMeshClientProcess(Process):
             input_fps()
             frame_count += 1
 
-        
+        # 呼吸循环参数
+        breath_start_time = time.perf_counter()
         pose_filter = OneEuroFilterNumpy(freq=input_fps.view(), mincutoff=args.filter_min_cutoff, beta=args.filter_beta)
         position_offset = None
         print("Webcam Input Running at {:.2f} FPS".format(input_fps.view()))
@@ -52,6 +53,13 @@ class FaceMeshClientProcess(Process):
             results = facemesh.process(rgb_frame)
             if results.multi_face_landmarks is None:
                 continue
+
+            # 计算呼吸效果（使用 sin 函数，在 breath_cycle 时间内从 0 到 1 再到 0）
+            breath_elapsed = (time.perf_counter() - breath_start_time) % args.breath_cycle
+            # 使用 sin 函数，让值在一个周期内从 0 -> 1 -> 0
+            # sin 在 0 到 π 之间从 0 到 1 到 0
+            breath_value = np.sin(breath_elapsed / args.breath_cycle * np.pi)
+
             facial_landmarks = results.multi_face_landmarks[0].landmark
             pose = get_pose(facial_landmarks)
             eye_l_h_temp = pose[0]
@@ -81,6 +89,7 @@ class FaceMeshClientProcess(Process):
             pose_vector[2] = (z_angle + 1.5) * 2 - position_offset[2]  # temp weight
             pose_vector[3] = pose_vector[1]
             pose_vector[4] = pose_vector[2]
+            pose_vector[5] = breath_value
 
             model_input_arr = eyebrow_vector
             model_input_arr.extend(mouth_eye_vector)
