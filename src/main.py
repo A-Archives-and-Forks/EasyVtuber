@@ -1,0 +1,128 @@
+import numpy as np
+import time
+from .model_infer_client import ModelClientProcess
+from .args import args
+from .utils.preprocess import resize_to_512_center, apply_color_curves
+import cv2
+from .utils.shared_mem_guard import SharedMemoryGuard
+from multiprocessing import shared_memory
+from .utils.timer_wait import wait_until
+from PIL import Image
+from .utils.fps import FPS
+import pyvirtualcam
+from OpenGL.GL import GL_RGBA
+
+
+def main():
+    # Load character image
+    img = Image.open(f"data/images/{args.character}.png")
+    img = img.convert('RGBA')
+    ow, oh = img.size
+    for i, px in enumerate(img.getdata()):
+        if px[3] <= 0:
+            y = i // ow
+            x = i % ow
+            img.putpixel((x, y), (0, 0, 0, 0))
+    if ow != 512 or oh != 512:
+        img = resize_to_512_center(img)
+    if args.alpha_clean:
+        curves = {
+            'a': [
+                (60, 0),
+                (200, 255)
+            ]
+        }
+        img = apply_color_curves(img, curves)
+    input_image = np.array(img)
+    input_image = cv2.cvtColor(input_image, cv2.COLOR_RGBA2BGRA)
+
+    print("Character Image Loaded:", args.character)
+
+    pose_position_shm = shared_memory.SharedMemory(create=True, size=(45 + 4) * 4)  # 45 floats for pose, 4 floats for position
+    input_process = None
+
+    if args.cam_input:
+        from .face_mesh_client import FaceMeshClientProcess
+        input_process = FaceMeshClientProcess(pose_position_shm)
+    elif args.ifm_input is not None:
+        from .i_facial_mocap_client import IFMClientProcess
+        input_process = IFMClientProcess(pose_position_shm)
+    elif args.osf_input is not None:
+        from .open_see_face_client import OSFClientProcess
+        input_process = OSFClientProcess(pose_position_shm)
+    elif args.mouse_input is not None:
+        from .mouse_client import MouseClientProcess
+        input_process = MouseClientProcess(pose_position_shm)
+    else:
+        from .debug_input_client import DebugInputClientProcess
+        input_process = DebugInputClientProcess(pose_position_shm)
+
+    input_fps = input_process.fps
+    input_process.daemon = True
+    input_process.start()
+
+    infer_process = ModelClientProcess(input_image, pose_position_shm, input_fps)
+    infer_process.daemon = True
+    infer_process.start()
+
+    cam_width_scale = 2 if args.alpha_split else 1
+    ret_channels = 3 if args.output_virtual_cam or args.output_debug else 4
+    ret_batch_shm_channels = [
+        SharedMemoryGuard(infer_process.ret_shared_mem, ctrl_name=f"ret_shm_ctrl_batch_{i}")
+        for i in range(args.interpolation_scale)
+    ]
+    np_ret_shms = [
+        np.ndarray((args.model_output_size, cam_width_scale * args.model_output_size, ret_channels), dtype=np.uint8,
+                    buffer=infer_process.ret_shared_mem.buf[i * cam_width_scale * args.model_output_size * args.model_output_size * ret_channels:
+                                                    (i + 1) * cam_width_scale * args.model_output_size * args.model_output_size * ret_channels])
+        for i in range(args.interpolation_scale)
+    ]
+
+    last_time : float = time.perf_counter()
+    interval : float = 1.0 / args.frame_rate_limit if args.frame_rate_limit > 0 else 0.0
+    
+    if args.output_virtual_cam:
+        virtual_cam = pyvirtualcam.Camera(width=cam_width_scale * args.model_output_size,
+                                    height=args.model_output_size,
+                                    fps=args.frame_rate_limit,
+                                    backend='obs',
+                                    fmt=pyvirtualcam.PixelFormat.RGB)
+        print(f'Using virtual camera: {virtual_cam.device}')
+    elif args.output_spout2:
+        from PySpout import SpoutSender
+        spout_sender = SpoutSender("EasyVtuber", cam_width_scale * args.model_output_size,
+                                 args.model_output_size, GL_RGBA)
+    else:
+        print("Using OpenCV windows for output display.")
+
+    pipeline_fps = FPS()
+    
+    print("Interval set to {:.3f} seconds".format(interval))
+    while True:
+        infer_process.finish_event.wait()
+        infer_process.finish_event.clear()
+        for i in range(args.interpolation_scale):
+            ret_batch_shm_channels[i].acquire()
+        for i in range(args.interpolation_scale):
+            if args.output_virtual_cam:
+                virtual_cam.send(np_ret_shms[i])
+            elif args.output_spout2:
+                spout_sender.send_image(np_ret_shms[i], False)
+            else:
+                cv2.imshow("EasyVtuber Debug Frame", np_ret_shms[i])
+                cv2.waitKey(1)
+            
+            wait_until(last_time + interval)
+            last_time += interval
+            ret_batch_shm_channels[i].release()
+        print("Infer Process FPS: {:.2f}, Input FPS: {:.2f}, Model Avg Interval: {:.2f} ms, Cache Hit Ratio: {:.2f}%, GPU Cache Hit Ratio: {:.2f}%, Output Pipeline FPS {:.5f}".format(
+            infer_process.pipeline_fps_number.value,
+            input_fps.value,
+            infer_process.average_model_interval.value * 1000,
+            infer_process.cache_hit_ratio.value * 100,
+            infer_process.gpu_cache_hit_ratio.value * 100,
+            pipeline_fps() * args.interpolation_scale
+        ), end ='\r', flush=True)
+
+if __name__ == "__main__":
+    main()
