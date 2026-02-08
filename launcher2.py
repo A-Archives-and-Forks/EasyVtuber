@@ -44,9 +44,9 @@ default_arg = {
     'ram_cache_size': '2gb',
     'vram_cache_size': '2gb',
     'model_select': 'seperable_half',
-    'interpolation': 'x3_half',
+    'interpolation': "Off",
     'frame_rate_limit': '30',
-    'sr': 'anime4k_x2',
+    'sr': "Off",
     'use_tensorrt': False,
     'preset': 'Low',
     'mouse_audio_input': False,
@@ -484,17 +484,21 @@ class LauncherPanel(wx.Panel):
 
         def onActivate(e):
             global characterList
-            tName = self.optionDict['character'].GetValue()
+            # 用控件当前选中字符串，避免 GetValue() 用旧 mapping 按下标取导致 IndexError
+            char_ctrl = self.optionDict['character'].control
+            tName = char_ctrl.GetStringSelection() if char_ctrl.GetSelection() >= 0 else ''
             refreshList()
-            self.optionDict['character'].control.SetItems(
-                characterList)
+            scanStudentModels()
+            self.optionDict['character'].mapping = characterList  # 同步 mapping，后续 GetValue() 才正确
+            char_ctrl.SetItems(characterList)
             try:
                 idx = characterList.index(tName)
-                self.optionDict['character'].control.SetSelection(idx)
-            except ValueError:
-                # Character not found, select first available
+                char_ctrl.SetSelection(idx)
+            except (ValueError, TypeError):
                 if characterList:
-                    self.optionDict['character'].control.SetSelection(0)
+                    char_ctrl.SetSelection(0)
+            # 重新应用“当前模型 → 是否锁定 character”的规则
+            onModelSelect()
 
         if not hasTRTSupport:
             self.optionDict['use_tensorrt'].control.SetValue(False)
