@@ -96,14 +96,35 @@ def main():
         print("Using OpenCV windows for output display.")
 
     pipeline_fps = FPS()
-    
+    last_frame_time = None  # 上一帧输出时间，用于打印帧时间差
+    last_batch_start_time = None  # 上一批就绪时间，用于周期估计
+    n_frames = args.interpolation_scale
+    min_period = n_frames * interval if interval > 0 else n_frames / 60.0  # 60fps 下本批最少占用时间
+    default_period = 1.0 / 15.0  # 约 15fps 推理时的周期，首包无历史时使用
+
     print("Interval set to {:.3f} seconds".format(interval))
     while True:
         infer_process.finish_event.wait()
         infer_process.finish_event.clear()
-        for i in range(args.interpolation_scale):
+        for i in range(n_frames):
             ret_batch_shm_channels[i].acquire()
-        for i in range(args.interpolation_scale):
+
+        # 动态周期：本批就绪与上一批就绪的时间间隔，用于本批内均匀排期
+        batch_start_time = time.perf_counter()
+        if last_batch_start_time is not None:
+            observed_period = batch_start_time - last_batch_start_time
+            period = max(min_period, min(observed_period, 1.0))
+        else:
+            period = max(min_period, default_period)
+        last_batch_start_time = batch_start_time
+
+        for i in range(n_frames):
+            # 均匀排期 + frame_rate_limit：取两者中较晚的时间发送
+            target_send_time = batch_start_time + i * (period / n_frames)
+            if interval > 0:
+                target_send_time = max(target_send_time, last_time)
+            wait_until(target_send_time)
+
             if args.output_virtual_cam:
                 virtual_cam.send(np_ret_shms[i])
             elif args.output_spout2:
@@ -111,13 +132,15 @@ def main():
             else:
                 cv2.imshow("EasyVtuber Debug Frame", np_ret_shms[i])
                 cv2.waitKey(1)
-            # 限速：若 last_time 落后于当前时间则对齐到 now，避免开局成坨送帧
-            
-            wait_until(last_time + interval)
-            last_time += interval
-            now = time.perf_counter()
-            if last_time < now:
-                last_time = now
+            now_send = time.perf_counter()
+            if last_frame_time is not None:
+                # print("帧时间差: {:.1f} ms, period: {:.1f} ms, i: {}".format((now_send - last_frame_time) * 1000, period     * 1000, i))
+            last_frame_time = now_send
+            # 限速：下一帧最早在 last_time + interval，若已落后于当前时间则对齐到 now
+            if interval > 0:
+                last_time += interval
+                if last_time < now_send:
+                    last_time = now_send
             ret_batch_shm_channels[i].release()
         output_pipeline_fps_val = pipeline_fps() * args.interpolation_scale
         infer_process.output_pipeline_fps.value = output_pipeline_fps_val
@@ -128,7 +151,7 @@ def main():
             infer_process.cache_hit_ratio.value * 100,
             infer_process.gpu_cache_hit_ratio.value * 100,
             output_pipeline_fps_val
-        ), end ='\r', flush=True)
+        ), end='\r', flush=True)
 
 if __name__ == "__main__":
     main()
