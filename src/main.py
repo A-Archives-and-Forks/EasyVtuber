@@ -111,9 +111,13 @@ def main():
             else:
                 cv2.imshow("EasyVtuber Debug Frame", np_ret_shms[i])
                 cv2.waitKey(1)
+            # 限速：若 last_time 落后于当前时间则对齐到 now，避免开局成坨送帧
             
             wait_until(last_time + interval)
             last_time += interval
+            now = time.perf_counter()
+            if last_time < now:
+                last_time = now
             ret_batch_shm_channels[i].release()
         print("Infer Process FPS: {:.2f}, Input FPS: {:.2f}, Model Avg Interval: {:.2f} ms, Cache Hit Ratio: {:.2f}%, GPU Cache Hit Ratio: {:.2f}%, Output Pipeline FPS {:.5f}".format(
             infer_process.pipeline_fps_number.value,

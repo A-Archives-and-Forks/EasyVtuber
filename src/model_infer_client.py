@@ -1,4 +1,5 @@
 import math
+import os
 from multiprocessing import Process, Value, shared_memory, Event
 import cv2
 import numpy as np
@@ -32,6 +33,9 @@ class ModelClientProcess(Process):
         self.finish_event = Event()
 
     def run(self):
+        # 插值帧红点标记：由 --mark_interpolated 控制，供 ezvtb_rt 读取
+        if getattr(args, 'mark_interpolated', False):
+            os.environ['EZVTB_MARK_INTERPOLATED'] = '1'
         pose_position_shm_guard = SharedMemoryGuard(self.pose_position_shm, ctrl_name="pose_position_shm_ctrl")
         np_pose_shm = np.ndarray((45,), dtype=np.float32, buffer=self.pose_position_shm.buf[:45 * 4])
         np_position_shm = np.ndarray((4,), dtype=np.float32, buffer=self.pose_position_shm.buf[45 * 4:45 * 4 + 4 * 4])
