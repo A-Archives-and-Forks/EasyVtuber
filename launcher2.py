@@ -316,8 +316,14 @@ def _read_pipe_to_stream(pipe, dest_stream, out_lines=None, on_line_callback=Non
                 out_lines.append(text)
             if on_line_callback is not None:
                 on_line_callback(text)
-            dest_stream.write(text)
-            dest_stream.flush()
+            # 检查dest_stream是否可用（pythonw环境下可能不可用）
+            if dest_stream is not None:
+                try:
+                    dest_stream.write(text)
+                    dest_stream.flush()
+                except (AttributeError, OSError, ValueError):
+                    # pythonw环境下sys.stdout/sys.stderr可能不可用，忽略错误
+                    pass
     except Exception:
         pass
     finally:
@@ -606,13 +612,23 @@ class LauncherPanel(wx.Panel):
         self.btnLaunch.SetLabelText('Working...')
 
         if p is not None:
-            subprocess.run(['taskkill', '/F', '/PID', str(p.pid), '/T'], stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL)
+            creation_flags = 0
+            if sys.platform == 'win32':
+                # CREATE_NO_WINDOW = 0x08000000
+                creation_flags = 0x08000000
+            subprocess.run(['taskkill', '/F', '/PID', str(p.pid), '/T'], 
+                          stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL,
+                          creationflags=creation_flags)
             p = None
             self.statusCtrl.Clear()
             self.btnLaunch.SetLabelText("Save & Launch")
         else:
-            run_args = [sys.executable, '-m', 'src.main']
+            # 如果启动器是用pythonw启动的，使用python.exe来启动main以便捕获控制台输出
+            python_exe = sys.executable
+            if 'pythonw' in python_exe.lower():
+                python_exe = python_exe.replace('pythonw.exe', 'python.exe').replace('pythonw', 'python')
+            run_args = [python_exe, '-m', 'src.main']
             if len(args['character']):
                 run_args.append('--character')
                 run_args.append(args['character'])
@@ -744,10 +760,16 @@ class LauncherPanel(wx.Panel):
             self.main_stderr_lines.clear()
             self.statusCtrl.SetValue('Launched')
             on_line = lambda line: _on_main_log_line(self, line)
+            # 使用CREATE_NO_WINDOW标志隐藏控制台窗口，但仍可捕获输出
+            creation_flags = 0
+            if sys.platform == 'win32':
+                # CREATE_NO_WINDOW = 0x08000000
+                creation_flags = 0x08000000
             p = subprocess.Popen(
                 run_args,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                creationflags=creation_flags,
             )
             threading.Thread(
                 target=_read_pipe_to_stream,
@@ -772,8 +794,14 @@ class MainFrame(wx.Frame):
     def OnClose(self, e):
         global p
         if p is not None:
-            subprocess.run(['taskkill', '/F', '/PID', str(p.pid), '/T'], stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL)
+            creation_flags = 0
+            if sys.platform == 'win32':
+                # CREATE_NO_WINDOW = 0x08000000
+                creation_flags = 0x08000000
+            subprocess.run(['taskkill', '/F', '/PID', str(p.pid), '/T'], 
+                          stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL,
+                          creationflags=creation_flags)
         e.Skip()
 
     def InitUi(self):
