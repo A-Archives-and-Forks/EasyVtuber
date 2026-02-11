@@ -38,7 +38,8 @@ def main():
 
     print("Character Image Loaded:", args.character)
 
-    pose_position_shm = shared_memory.SharedMemory(create=True, size=(45 + 4) * 4)  # 45 floats for pose, 4 floats for position
+    pose_position_shm = shared_memory.SharedMemory(create=True,
+                                                   size=(45 + 4) * 4)  # 45 floats for pose, 4 floats for position
     input_process = None
 
     if args.cam_input:
@@ -73,25 +74,26 @@ def main():
     ]
     np_ret_shms = [
         np.ndarray((args.model_output_size, cam_width_scale * args.model_output_size, ret_channels), dtype=np.uint8,
-                    buffer=infer_process.ret_shared_mem.buf[i * cam_width_scale * args.model_output_size * args.model_output_size * ret_channels:
-                                                    (i + 1) * cam_width_scale * args.model_output_size * args.model_output_size * ret_channels])
+                   buffer=infer_process.ret_shared_mem.buf[
+                       i * cam_width_scale * args.model_output_size * args.model_output_size * ret_channels:
+                       (i + 1) * cam_width_scale * args.model_output_size * args.model_output_size * ret_channels])
         for i in range(args.interpolation_scale)
     ]
 
-    last_time : float = time.perf_counter()
-    interval : float = 1.0 / args.frame_rate_limit if args.frame_rate_limit > 0 else 0.0
-    
+    last_time: float = time.perf_counter()
+    interval: float = 1.0 / args.frame_rate_limit if args.frame_rate_limit > 0 else 0.0
+
     if args.output_virtual_cam:
         virtual_cam = pyvirtualcam.Camera(width=cam_width_scale * args.model_output_size,
-                                    height=args.model_output_size,
-                                    fps=args.frame_rate_limit,
-                                    backend='obs',
-                                    fmt=pyvirtualcam.PixelFormat.RGB)
+                                          height=args.model_output_size,
+                                          fps=args.frame_rate_limit,
+                                          backend='obs',
+                                          fmt=pyvirtualcam.PixelFormat.RGB)
         print(f'Using virtual camera: {virtual_cam.device}')
     elif args.output_spout2:
         from PySpout import SpoutSender
         spout_sender = SpoutSender("EasyVtuber", cam_width_scale * args.model_output_size,
-                                 args.model_output_size, GL_RGBA)
+                                   args.model_output_size, GL_RGBA)
     else:
         print("Using OpenCV windows for output display.")
 
@@ -133,8 +135,6 @@ def main():
                 cv2.imshow("EasyVtuber Debug Frame", np_ret_shms[i])
                 cv2.waitKey(1)
             now_send = time.perf_counter()
-            if last_frame_time is not None:
-                # print("帧时间差: {:.1f} ms, period: {:.1f} ms, i: {}".format((now_send - last_frame_time) * 1000, period     * 1000, i))
             last_frame_time = now_send
             # 限速：下一帧最早在 last_time + interval，若已落后于当前时间则对齐到 now
             if interval > 0:
@@ -144,14 +144,16 @@ def main():
             ret_batch_shm_channels[i].release()
         output_pipeline_fps_val = pipeline_fps() * args.interpolation_scale
         infer_process.output_pipeline_fps.value = output_pipeline_fps_val
-        print("Infer Process FPS: {:.2f}, Input FPS: {:.2f}, Model Avg Interval: {:.2f} ms, Cache Hit Ratio: {:.2f}%, GPU Cache Hit Ratio: {:.2f}%, Output Pipeline FPS {:.5f}".format(
-            infer_process.pipeline_fps_number.value,
-            input_fps.value,
-            infer_process.average_model_interval.value * 1000,
-            infer_process.cache_hit_ratio.value * 100,
-            infer_process.gpu_cache_hit_ratio.value * 100,
-            output_pipeline_fps_val
-        ), end='\r', flush=True)
+        print(
+            "Infer Process FPS: {:.2f}, Input FPS: {:.2f}, Model Avg Interval: {:.2f} ms, Cache Hit Ratio: {:.2f}%, GPU Cache Hit Ratio: {:.2f}%, Output Pipeline FPS {:.5f}".format(
+                infer_process.pipeline_fps_number.value,
+                input_fps.value,
+                infer_process.average_model_interval.value * 1000,
+                infer_process.cache_hit_ratio.value * 100,
+                infer_process.gpu_cache_hit_ratio.value * 100,
+                output_pipeline_fps_val
+            ), end='\r', flush=True)
+
 
 if __name__ == "__main__":
     main()
